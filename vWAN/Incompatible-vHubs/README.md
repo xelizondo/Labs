@@ -80,3 +80,6 @@ This design scenario depicts an (undocumented) incompatibility when mixing virtu
 ## Lesson learned
 
 vWAN PG discourages mixing Secured virtual hubs with Routing Intent enabled and Secured virtual hubs with Routing Intent disabled.
+
+
+![Environment](./media/hub-hub-route-maps-requirement.png)
