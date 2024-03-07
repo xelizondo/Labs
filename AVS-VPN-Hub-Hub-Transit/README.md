@@ -41,8 +41,8 @@ Deploy a new ExpressRoute Gateway using the previously create "GatewaySubnet".
 - Create a VM for BGP advertising purposes on its own Subnet (/28 or greater). We will be using a CentOS VM with single NIC and FRRRouting installed. The below commands will install the FRR in the CentOS VM. (Change to fit to your environment)
 
 ```
-routeServerSubnetPrefix="172.25.0.128/27"
-bgpNvaSubnetGateway="172.25.2.33"
+routeServerSubnetPrefix="172.16.2.32/27"
+bgpNvaSubnetGateway="172.16.2.65"
 sudo -s
 dnf install frr -y 
 sed -i 's/bgpd=no/bgpd=yes/g' /etc/frr/daemons 
@@ -51,9 +51,10 @@ chown frr /etc/frr/bgpd.conf
 chmod 640 /etc/frr/bgpd.conf 
 systemctl enable frr --now 
 ip route add $routeServerSubnetPrefix via $bgpNvaSubnetGateway dev eth0
-``` 
+```
 
-
+- Confirm that FRR has been successfully installed and started by typing: sudo vtysh
+- If FRR has been correctly installed, its command shell will start. Optional: To come out from FRR Shell, type exit on command prompt. 
 ## Step 3: Create an Azure Route Server (ARS) in the new Hub VNet
 
 - Create a subnet with the name of RouteServerSubnet. The minimum size of this subnet needs to be a /27.
@@ -72,6 +73,16 @@ ip route add $routeServerSubnetPrefix via $bgpNvaSubnetGateway dev eth0
 
 - Peer ARS with the BGP NVA. **Example. Peer ARS with a BGP NVA:**
 ![image](./media/ars-peer-nva.png)
+
+Example:
+```
+rg=lab-vwan-mregion
+ars=ars1
+peername=nvapeer
+peerasn=65111
+nvapeerip=172.16.2.68
+az network routeserver peering create -g $rg --routeserver $ars -n $ars-$peername --peer-asn $peerasn --peer-ip $nvapeerip --no-wait
+```
 
 ## Step 3: Create an Azure Firewall in the new Hub VNet
 
@@ -143,25 +154,26 @@ Example. Route entries:
 - Advertise with BGP the default route 0.0.0.0/0 and matching remote networks to the ARS via the Azure Firewall IP (next hop ip)
 
 ```
+sudo vtysh
 conf term
 ! 
-route-map SET-NEXT-HOP-FW permit 10 
-set ip next-hop 172.25.0.68 
-exit 
+route-map SET-NEXT-HOP-FW permit 10
+set ip next-hop 192.168.10.132
+exit
 ! 
-router bgp 65111 
-no bgp ebgp-requires-policy 
-neighbor 172.25.0.132 remote-as 65515   
-neighbor 172.25.0.132 ebgp-multihop 2 
-neighbor 172.25.0.133 remote-as 65515  
-neighbor 172.25.0.133 ebgp-multihop 2 
+router bgp 65111
+no bgp ebgp-requires-policy
+neighbor 172.16.2.36 remote-as 65515
+neighbor 172.16.2.36 ebgp-multihop 2
+neighbor 172.16.2.37 remote-as 65515
+neighbor 172.16.2.37 ebgp-multihop 2
 network 0.0.0.0/0
 network 172.26.0.0/22
 network 192.168.1.0/24
 ! 
-address-family ipv4 unicast 
-  neighbor 172.25.0.132 route-map SET-NEXT-HOP-FW out 
-  neighbor 172.25.0.133 route-map SET-NEXT-HOP-FW out 
+address-family ipv4 unicast
+  neighbor 172.16.2.36 route-map SET-NEXT-HOP-FW out 
+  neighbor 172.16.2.37 route-map SET-NEXT-HOP-FW out 
 exit-address-family 
 ! 
 exit 
@@ -172,6 +184,10 @@ write file
 ```
 
 **Example. Route entries output:**
+
+```
+show ip bgp sum 
+```
 
 ![image](./media/bgp-nva-route-advertised.png)
 
